@@ -18,57 +18,6 @@ from RNN_model import RNN_model
 #-----------------------------------------------------------------
 # Process training data
 vocab_size = 8000
-# x_train = []
-# with io.open("../preprocessed_data/imdb_train.txt", "r", encoding = "utf-8") as f:
-# 	lines = f.readlines()
-# for line in lines:
-# 	line = line.strip()
-# 	line = line.split(' ')
-# 	line = np.asarray(line, dtype = np.int)
-
-# 	# Convert any token id greater than the dictionary size to unknown token ID 0
-# 	line[line > vocab_size] = 0
-
-# 	x_train.append(line)
-
-# # Grab the first 25000 sequences (because they have labels)
-# x_train = x_train[0:25000]
-# # The first 12500 are positive and the rest are negative
-# y_train = np.zeros((25000, ))
-# y_train[0:12500] = 1
-
-# # Another method: Remove stop words
-# # Load the saved imdb_dictionary (which is the id_to_word)
-# imdb_dict = np.load("../preprocessed_data/imdb_dictionary.npy")
-
-# # A list for stopwords
-# stopwords = nltk.corpus.stopwords.words('english')
-
-# # Find the indices of these stopwords
-# stopwords_id = [imdb_dict.get(token, -1) + 1 for token in stopwords]
-
-# vocab_size = 8000
-# x_train = []
-# with io.open("../preprocessed_data/imdb_train.txt", "r", encoding = "utf-8") as f:
-# 	lines = f.readlines()
-# for line in lines:
-# 	line = line.strip()
-# 	line = line.split(' ')
-# 	line = np.asarray(line, dtype = np.int)
-
-# 	# Convert any token id greater than the dictionary size to unknown token ID 0
-# 	line[line > vocab_size] = 0
-	
-# 	# Convert any token id equal to the that of stopwords to 0
-# 	stopwords_id = np.asarray(stopwords_id, dtype = np.int)
-# 	line = [line[i] if line[i] not in stopwords_id else 0 for i in range(len(line))]
-
-# 	x_train.append(line)
-
-# # Grab the first 25000 sequences
-# x_train = x_train[0:25000]
-# y_train = np.zeros((25000, ))
-# y_train[0:12500] = 1
 
 #-----------------------------------------------------------------
 # Process testing data
@@ -90,26 +39,12 @@ y_test[0:12500] = 1
 #-----------------------------------------------------------------
 # Load model
 vocab_size += 1
-model = torch.load("rnn.model")
+model = torch.load("rnn_100.model")
 model.cuda()
-
-# # Optimizer and learning rate
-# opt = "SGD"
-# LR = 0.01
-# # opt = "Adam"
-# # LR = 0.001
-
-# if opt == "SGD":
-# 	optimizer = optim.SGD(model.parameters(),
-# 						  lr = LR,
-# 						  momentum = 0.9)
-# elif opt == "Adam":
-# 	optimizer = optim.Adam(model.parameters(), 
-# 						   lr = LR)
 
 #-----------------------------------------------------------------
 # Begin testing
-batch_size = 200
+batch_size = 50
 no_of_epochs = 10
 L_Y_test = len(y_test)
 

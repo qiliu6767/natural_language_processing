@@ -49,11 +49,11 @@ class LockedDropout(nn.Module):
 
 		return mask * x
 
-class RNN_model(nn.Module):
+class RNN_language_model(nn.Module):
 	def __init__(self, vocab_size, no_of_hidden_units):
-		super(RNN_model, self).__init__()
+		super(RNN_language_model, self).__init__()
 
-		self.embedding = nn.Embedding(vocab_size, no_of_hidden_units)#, padding_idx = 0)
+		self.embedding = nn.Embedding(vocab_size, no_of_hidden_units)
 
 		self.lstm1 = StatefulLSTM(no_of_hidden_units, no_of_hidden_units)
 		self.bn_lstm1 = nn.BatchNorm1d(no_of_hidden_units)
@@ -67,30 +67,28 @@ class RNN_model(nn.Module):
 		self.bn_lstm3 = nn.BatchNorm1d(no_of_hidden_units)
 		self.dropout3 = LockedDropout()
 
-		self.fc_output = nn.Linear(no_of_hidden_units, 1)
+		self.decoder = nn.Linear(no_of_hidden_units, vocab_size)
 
-		# self.loss = nn.CrossEntropyLoss()
-		self.loss = nn.BCEWithLogitsLoss()
+		self.loss = nn.CrossEntropyLoss()
+
+		self.vocab_size = vocab_size
 
 	def reset_state(self):
 		self.lstm1.reset_state()
 		self.dropout1.reset_state()
-
 		self.lstm2.reset_state()
 		self.dropout2.reset_state()
-
 		self.lstm3.reset_state()
 		self.dropout3.reset_state()
 
-	def forward(self, x, t, train = True):
-		embed = self.embedding(x)
+	def forward(self, x, train = True):
+		embed = self.embedding(x) # batch_size * time_steps * features
 
-		no_of_timesteps = embed.shape[1]
+		no_of_timesteps = embed.shape[1] - 1
 
 		self.reset_state()
 
 		outputs = []
-
 		for i in range(no_of_timesteps):
 			h = self.lstm1(embed[:, i, :])
 			h = self.bn_lstm1(h)
@@ -103,31 +101,24 @@ class RNN_model(nn.Module):
 			h = self.lstm3(h)
 			h = self.bn_lstm3(h)
 			h = self.dropout3(h, dropout = 0.5, train = train)
-			
+
+			h = self.decoder(h)
+
 			outputs.append(h)
 
-		outputs = torch.stack(outputs) # (time_steps, batch_size, no_of_hidden_units)
-		outputs = outputs.permute(1, 2, 0) # (batch_size, features, time_steps)
+		outputs = torch.stack(outputs) # time_steps * batch_size * vocab_size
+		target_prediction = outputs.permute(1, 0, 2) # batch_size * time_steps * vocab_size
+		outputs = outputs.permute(1, 2, 0)
 
-		pool = nn.MaxPool1d(no_of_timesteps)
-		h = pool(outputs)
-		h = h.view(h.size(0), -1) # (batch_size, no_of_hidden_units)
+		if train == True:
+			target_prediction = target_prediction.contiguous().view(-1, self.vocab_size)
+			target = x[:, 1:].contiguous().view(-1)
+			loss = self.loss(target_prediction, target)
 
-		h = self.fc_output(h)
+			return loss, outputs
+		else:
+			return outputs
 
-		return self.loss(h[:, 0], t), h[:, 0]			
-
-# # Test
-# rnn = nn.LSTMCell(input_size = 10, hidden_size = 20)
-# input = torch.randn(6, 3, 10)
-# hx = torch.randn(3, 20)
-# cx = torch.randn(3, 20)
-# output = []
-# for i in range(6): # time_steps = 6 here
-# 	hx, cx = rnn(input[i], (hx, cx))
-# 	output.append(hx)
-
-# print(output[0].size())
 
 
 

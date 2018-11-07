@@ -37,89 +37,77 @@ x_train = x_train[0:25000]
 y_train = np.zeros((25000, ))
 y_train[0:12500] = 1
 
-# # Another method: Remove stop words
-# # Load the saved imdb_dictionary (which is the id_to_word)
-# imdb_dict = np.load("../preprocessed_data/imdb_dictionary.npy")
-
-# # A list for stopwords
-# stopwords = nltk.corpus.stopwords.words('english')
-
-# # Find the indices of these stopwords
-# stopwords_id = [imdb_dict.get(token, -1) + 1 for token in stopwords]
-
-# vocab_size = 8000
-# x_train = []
-# with io.open("../preprocessed_data/imdb_train.txt", "r", encoding = "utf-8") as f:
-# 	lines = f.readlines()
-# for line in lines:
-# 	line = line.strip()
-# 	line = line.split(' ')
-# 	line = np.asarray(line, dtype = np.int)
-
-# 	# Convert any token id greater than the dictionary size to unknown token ID 0
-# 	line[line > vocab_size] = 0
-	
-# 	# Convert any token id equal to the that of stopwords to 0
-# 	stopwords_id = np.asarray(stopwords_id, dtype = np.int)
-# 	line = [line[i] if line[i] not in stopwords_id else 0 for i in range(len(line))]
-
-# 	x_train.append(line)
-
-# # Grab the first 25000 sequences
-# x_train = x_train[0:25000]
-# y_train = np.zeros((25000, ))
-# y_train[0:12500] = 1
-
-#-----------------------------------------------------------------
-# Process testing data
-x_test = []
-with io.open("../preprocessed_data/imdb_test.txt", "r", encoding = "utf-8") as f:
-	lines = f.readlines()
-
-for line in lines:
-	line = line.strip()
-	line = line.split(' ')
-	line = np.asarray(line, dtype = np.int)
-
-	line[line > vocab_size] = 0
-	x_test.append(line)
-
-y_test = np.zeros((25000, ))
-y_test[0:12500] = 1
-
 #-----------------------------------------------------------------
 # Load model
 vocab_size += 1
 model = RNN_model(vocab_size = vocab_size, 
 				  no_of_hidden_units = 500)
+
+language_model = torch.load("../3a/language_50.model")
+
+model.embedding.load_state_dict(language_model.embedding.state_dict())
+model.lstm1.lstm.load_state_dict(language_model.lstm1.lstm.state_dict())
+model.bn_lstm1.load_state_dict(language_model.bn_lstm1.state_dict())
+
+model.lstm2.lstm.load_state_dict(language_model.lstm2.lstm.state_dict())
+model.bn_lstm2.load_state_dict(language_model.bn_lstm2.state_dict())
+
+model.lstm3.lstm.load_state_dict(language_model.lstm3.lstm.state_dict())
+model.bn_lstm3.load_state_dict(language_model.bn_lstm3.state_dict())
+
 model.cuda()
 
+# Make a list of parameters we want to train
+# Because the model would overfit if we train everything
+params = []
+# for param in model.embedding.parameters():
+# 	params.append(param)
+
+# for param in model.lstm1.parameters():
+# 	params.append(param)
+
+# for param in model.bn_lstm1.parameters():
+# 	params.append(param)
+
+# for param in model.lstm2.parameters():
+# 	params.append(param)
+
+# for param in model.bn_lstm2.parameters():
+# 	params.append(param)
+
+for param in model.lstm3.parameters():
+	params.append(param)
+
+for param in model.bn_lstm3.parameters():
+	params.append(param)
+
+for param in model.fc_output.parameters():
+	params.append(param)
+
+
 # Optimizer and learning rate
-opt = "SGD"
-LR = 0.01
-# opt = "Adam"
-# LR = 0.001
+# opt = "SGD"
+# LR = 0.01
+opt = "Adam"
+LR = 0.001
 
 if opt == "SGD":
-	optimizer = optim.SGD(model.parameters(),
+	optimizer = optim.SGD(params,
 						  lr = LR,
 						  momentum = 0.9)
 elif opt == "Adam":
-	optimizer = optim.Adam(model.parameters(), 
+	optimizer = optim.Adam(params, 
 						   lr = LR)
 
 #-----------------------------------------------------------------
 # Begin training
 batch_size = 200
-no_of_epochs = 20
+no_of_epochs = 30
 L_Y_train = len(y_train)
-L_Y_test = len(y_test)
 
-model.train()
-
-train_loss = []
-train_accu = []
-test_accu = []
+# train_loss = []
+# train_accu = []
+# test_accu = []
 
 for epoch in range(no_of_epochs):
 	# Training
@@ -134,12 +122,7 @@ for epoch in range(no_of_epochs):
 
 	for i in range(0, L_Y_train, batch_size):
 		x_input2 = [x_train[j] for j in I_permutation[i:i + batch_size]]
-		# # Original Sequence Length
-		# sequence_length = 100
-		# Longer Sequence Length
-		# sequence_length = 250
-		# Shorter Sequence Length
-		sequence_length = 50
+		sequence_length = 100
 		x_input = np.zeros((batch_size, sequence_length), dtype = np.int)
 		for j in range(batch_size):
 			x = np.asarray(x_input2[j])
@@ -158,6 +141,14 @@ for epoch in range(no_of_epochs):
 		optimizer.zero_grad()
 		loss, pred = model(data, target, train = True)
 		loss.backward()
+		
+		# Avoid error "Numerical result out of range"
+		if (epoch > 2):
+			for group in optimizer.param_groups:
+				for p in group['params']:
+					state = optimizer.state[p]
+					if ("step" in state and state['step'] >= 1024):
+						state['step'] = 1000
 
 		optimizer.step()
 
@@ -174,8 +165,8 @@ for epoch in range(no_of_epochs):
 	epoch_acc /= epoch_counter
 	epoch_loss /= (epoch_counter / batch_size)
 
-	train_loss.append(epoch_loss)
-	train_accu.append(epoch_acc)
+	# train_loss.append(epoch_loss)
+	# train_accu.append(epoch_acc)
 
 	if (epoch + 1) % 3 == 0:
 		# Save the model
@@ -183,6 +174,7 @@ for epoch in range(no_of_epochs):
 
 	print(epoch, "%.2f" % (epoch_acc * 100.0), "%.4f" % epoch_loss, "%.4f" % float(time.time() - time1))
 
+torch.save(model, "rnn_100.model")
 	
 
 # data = [train_loss, train_accu, test_accu]
